@@ -376,6 +376,10 @@ export class CompositeBar implements ICompositeBar {
 		return Object.keys(this.compositeIdToActions);
 	}
 
+	public getOrderedComposites() {
+		return this.pinnedComposites;
+	}
+
 	private pullComposite(compositeId: string): void {
 		const index = Object.keys(this.compositeIdToActions).indexOf(compositeId);
 		if (index >= 0) {

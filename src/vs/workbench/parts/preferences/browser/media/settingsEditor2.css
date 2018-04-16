@@ -58,8 +58,16 @@
 
 /** List based styling **/
 
+.settings-editor > .settings-body {
+	display: flex;
+}
+
+.settings-editor > .settings-body .settings-nav-list-container {
+	width: 200px;
+}
+
 .settings-editor > .settings-body .settings-list-container {
-	width: 100%;
+	flex: 1;
 	border-spacing: 0;
 	border-collapse: separate;
 }

@@ -31,18 +31,19 @@ import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { EditorOptions } from 'vs/workbench/common/editor';
 import { SearchWidget, SettingsTargetsWidget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
-import { KEYBINDINGS_EDITOR_SHOW_DEFAULT_KEYBINDINGS, KEYBINDINGS_EDITOR_SHOW_USER_KEYBINDINGS } from 'vs/workbench/parts/preferences/common/preferences';
-import { IKeybindingItemEntry, IListEntry } from 'vs/workbench/services/preferences/common/keybindingsEditorModel';
 import { IPreferencesService, ISetting } from 'vs/workbench/services/preferences/common/preferences';
 import { PreferencesEditorInput2 } from 'vs/workbench/services/preferences/common/preferencesEditorInput';
-import { DefaultSettingsEditorModel, SETTINGS_ENTRY_TEMPLATE_ID, iterateSettings } from 'vs/workbench/services/preferences/common/preferencesModels';
+import { DefaultSettingsEditorModel } from 'vs/workbench/services/preferences/common/preferencesModels';
 
-export interface IListEntry {
+const SETTINGS_ENTRY_TEMPLATE_ID = 'settings.entry.template';
+const SETTINGS_NAV_TEMPLATE_ID = 'settings.nav.template';
+
+interface IListEntry {
 	id: string;
 	templateId: string;
 }
 
-export interface ISettingItemEntry extends IListEntry {
+interface ISettingItemEntry extends IListEntry {
 	key: string;
 	value: any;
 	description: string;
@@ -50,9 +51,9 @@ export interface ISettingItemEntry extends IListEntry {
 	enum?: string[];
 }
 
-export interface ISettingItem {
-	name: string;
-	description: string;
+interface INavListEntry extends IListEntry {
+	title: string;
+	index: number;
 }
 
 let $ = DOM.$;
@@ -68,8 +69,10 @@ export class SettingsEditor2 extends BaseEditor {
 	private settingsTargetsWidget: SettingsTargetsWidget;
 
 	private settingsListContainer: HTMLElement;
+	private navListContainer: HTMLElement;
 	private listEntries: IListEntry[];
 	private settingsList: List<IListEntry>;
+	private navList: List<IListEntry>;
 
 	private dimension: DOM.Dimension;
 	private delayedFiltering: Delayer<void>;
@@ -133,24 +136,6 @@ export class SettingsEditor2 extends BaseEditor {
 
 	getSecondaryActions(): IAction[] {
 		return <IAction[]>[
-			<IAction>{
-				label: localize('showDefaultKeybindings', "Show Default Keybindings"),
-				enabled: true,
-				id: KEYBINDINGS_EDITOR_SHOW_DEFAULT_KEYBINDINGS,
-				run: (): TPromise<any> => {
-					this.searchWidget.setValue('@source:default');
-					return TPromise.as(null);
-				}
-			},
-			<IAction>{
-				label: localize('showUserKeybindings', "Show User Keybindings"),
-				enabled: true,
-				id: KEYBINDINGS_EDITOR_SHOW_USER_KEYBINDINGS,
-				run: (): TPromise<any> => {
-					this.searchWidget.setValue('@source:user');
-					return TPromise.as(null);
-				}
-			}
 		];
 	}
 
@@ -160,14 +145,6 @@ export class SettingsEditor2 extends BaseEditor {
 
 	clearSearchResults(): void {
 		this.searchWidget.clear();
-	}
-
-	showSimilarKeybindings(keybindingEntry: IKeybindingItemEntry): TPromise<any> {
-		const value = `"${keybindingEntry.keybindingItem.keybinding.getAriaLabel()}"`;
-		if (value !== this.searchWidget.getValue()) {
-			this.searchWidget.setValue(value);
-		}
-		return TPromise.as(null);
 	}
 
 	private createHeader(parent: HTMLElement): void {
@@ -211,7 +188,23 @@ export class SettingsEditor2 extends BaseEditor {
 
 	private createBody(parent: HTMLElement): void {
 		const bodyContainer = DOM.append(parent, $('.settings-body'));
+		this.createNavList(bodyContainer);
 		this.createList(bodyContainer);
+	}
+
+	private createNavList(parent: HTMLElement): void {
+		this.navListContainer = DOM.append(parent, $('.settings-nav-list-container'));
+
+		const listRenderer = this.instantiationService.createInstance(NavItemRenderer);
+		this.navList = <WorkbenchList<IListEntry>>this._register(this.instantiationService.createInstance(
+			WorkbenchList,
+			this.navListContainer,
+			new Delegate(),
+			[listRenderer],
+			{
+				identityProvider: e => e.id,
+				ariaLabel: localize('navListLabel', "Settings Categories")
+			}));
 	}
 
 	private createList(parent: HTMLElement): void {
@@ -276,7 +269,16 @@ export class SettingsEditor2 extends BaseEditor {
 		if (this.defaultSettingsEditorModel) {
 
 			const entries: ISettingItemEntry[] = [];
-			for (const group of this.defaultSettingsEditorModel.settingsGroups) {
+			const navEntries: INavListEntry[] = [];
+			for (const groupIdx in this.defaultSettingsEditorModel.settingsGroups) {
+				const group = this.defaultSettingsEditorModel.settingsGroups[groupIdx];
+				navEntries.push({
+					id: group.id,
+					index: parseInt(groupIdx),
+					title: group.title,
+					templateId: SETTINGS_NAV_TEMPLATE_ID
+				});
+
 				for (const section of group.sections) {
 					for (const setting of section.settings) {
 						entries.push(this.settingToEntry(setting));
@@ -285,6 +287,7 @@ export class SettingsEditor2 extends BaseEditor {
 			}
 
 			this.settingsList.splice(0, this.settingsList.length, entries);
+			this.navList.splice(0, this.navList.length, navEntries);
 		}
 	}
 
@@ -308,6 +311,7 @@ export class SettingsEditor2 extends BaseEditor {
 		const listHeight = this.dimension.height - (DOM.getDomNodePagePosition(this.headerContainer).height + 12 /*padding*/);
 		this.settingsListContainer.style.height = `${listHeight}px`;
 		this.settingsList.layout(listHeight);
+		this.navList.layout(listHeight);
 	}
 
 	private reportFilteringUsed(filter: string): void {
@@ -340,7 +344,7 @@ export class SettingsEditor2 extends BaseEditor {
 class Delegate implements IDelegate<IListEntry> {
 
 	getHeight(element: IListEntry) {
-		return 110;
+		return element.templateId === SETTINGS_NAV_TEMPLATE_ID ? 25 : 110;
 	}
 
 	getTemplateId(element: IListEntry) {
@@ -348,7 +352,7 @@ class Delegate implements IDelegate<IListEntry> {
 	}
 }
 
-interface SettingItemTemplate {
+interface ISettingItemTemplate {
 	parent: HTMLElement;
 	toDispose: IDisposable[];
 
@@ -359,12 +363,18 @@ interface SettingItemTemplate {
 	valueElement: HTMLElement;
 }
 
+interface INavItemTemplate {
+	parent: HTMLElement;
+
+	labelElement: HTMLElement;
+}
+
 interface ISettingChangeEvent {
 	key: string;
 	value: any;
 }
 
-class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTemplate> {
+class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTemplate> {
 
 	private readonly _onDidChangeSetting: Emitter<ISettingChangeEvent> = new Emitter<ISettingChangeEvent>();
 	public readonly onDidChangeSetting: Event<ISettingChangeEvent> = this._onDidChangeSetting.event;
@@ -376,7 +386,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		@IThemeService private themeService: IThemeService
 	) { }
 
-	renderTemplate(parent: HTMLElement): SettingItemTemplate {
+	renderTemplate(parent: HTMLElement): ISettingItemTemplate {
 		DOM.addClass(parent, 'setting-item');
 
 		const keyElement = $('span.setting-item-key');
@@ -400,7 +410,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		};
 	}
 
-	renderElement(entry: ISettingItemEntry, index: number, template: SettingItemTemplate): void {
+	renderElement(entry: ISettingItemEntry, index: number, template: ISettingItemTemplate): void {
 		DOM.toggleClass(template.parent, 'odd', index % 2 === 1);
 
 		template.keyElement.textContent = entry.key;
@@ -410,7 +420,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		this.renderValue(entry, template);
 	}
 
-	private renderValue(entry: ISettingItemEntry, template: SettingItemTemplate): void {
+	private renderValue(entry: ISettingItemEntry, template: ISettingItemTemplate): void {
 		const onChange = value => this._onDidChangeSetting.fire({ key: entry.key, value });
 		template.valueElement.innerHTML = '';
 		if (entry.type === 'string' && entry.enum) {
@@ -428,7 +438,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		template.parent.appendChild(template.containerElement);
 	}
 
-	private renderBool(entry: ISettingItemEntry, template: SettingItemTemplate, onChange: (value: boolean) => void): void {
+	private renderBool(entry: ISettingItemEntry, template: ISettingItemTemplate, onChange: (value: boolean) => void): void {
 		const checkbox = new Checkbox({
 			isChecked: entry.value,
 			title: entry.key,
@@ -440,7 +450,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		template.valueElement.appendChild(checkbox.domNode);
 	}
 
-	private renderEnum(entry: ISettingItemEntry, template: SettingItemTemplate, onChange: (value: string) => void): void {
+	private renderEnum(entry: ISettingItemEntry, template: ISettingItemTemplate, onChange: (value: string) => void): void {
 		const idx = entry.enum.indexOf(entry.value);
 		const selectBox = new SelectBox(entry.enum, idx, this.contextViewService);
 		template.toDispose.push(selectBox);
@@ -453,7 +463,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 			selectBox.onDidSelect(e => onChange(entry.enum[e.index])));
 	}
 
-	private renderText(entry: ISettingItemEntry, template: SettingItemTemplate, onChange: (value: string) => void): void {
+	private renderText(entry: ISettingItemEntry, template: ISettingItemTemplate, onChange: (value: string) => void): void {
 		const inputBox = new InputBox(template.valueElement, this.contextViewService);
 		template.toDispose.push(attachInputBoxStyler(inputBox, this.themeService, {
 		}));
@@ -464,7 +474,35 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 			inputBox.onDidChange(e => onChange(e)));
 	}
 
-	disposeTemplate(template: SettingItemTemplate): void {
+	disposeTemplate(template: ISettingItemTemplate): void {
+		dispose(template.toDispose);
+	}
+}
+
+class NavItemRenderer implements IRenderer<INavListEntry, INavItemTemplate> {
+
+	get templateId(): string { return SETTINGS_NAV_TEMPLATE_ID; }
+
+	constructor(
+	) { }
+
+	renderTemplate(parent: HTMLElement): INavItemTemplate {
+		DOM.addClass(parent, 'nav-item');
+
+		const labelElement = DOM.append(parent, $('span.nav-item-label'));
+		return {
+			parent: parent,
+			labelElement
+		};
+	}
+
+	renderElement(entry: INavListEntry, index: number, template: INavItemTemplate): void {
+		DOM.toggleClass(template.parent, 'odd', index % 2 === 1);
+
+		template.labelElement.textContent = entry.title;
+	}
+
+	disposeTemplate(template: ISettingItemTemplate): void {
 		dispose(template.toDispose);
 	}
 }

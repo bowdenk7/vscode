@@ -598,9 +598,6 @@ export class DefaultSettings extends Disposable {
 
 }
 
-export const SETTINGS_ENTRY_TEMPLATE_ID = 'settings.entry.template';
-export const SETTINGS_HEADER_TEMPLATE_ID = 'settings.header.template';
-
 export class DefaultSettingsEditorModel extends AbstractSettingsModel implements ISettingsEditorModel {
 
 	private _model: ITextModel;

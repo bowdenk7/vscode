@@ -30,8 +30,14 @@
 	padding-left:10px;
 }
 
+.settings-editor>.settings-header>.settings-header-controls-container {
+	margin-top: 7px;
+	display: flex;
+}
+
 .settings-editor > .settings-header .open-settings-container {
-	margin-top: 10px;
+	padding-top: 3px; /* compensate for 3px padding inside target widget, should be cleaned up */
+	flex: 1;
 	display: flex;
 	opacity: 0.7;
 }

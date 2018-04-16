@@ -21,13 +21,13 @@ import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { EditorOptions } from 'vs/workbench/common/editor';
-import { SearchWidget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
+import { SearchWidget, SettingsTargetsWidget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
 import { KEYBINDINGS_EDITOR_SHOW_DEFAULT_KEYBINDINGS, KEYBINDINGS_EDITOR_SHOW_USER_KEYBINDINGS } from 'vs/workbench/parts/preferences/common/preferences';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IKeybindingItemEntry, IListEntry, KEYBINDING_ENTRY_TEMPLATE_ID, KEYBINDING_HEADER_TEMPLATE_ID } from 'vs/workbench/services/preferences/common/keybindingsEditorModel';
 import { IPreferencesService, ISetting } from 'vs/workbench/services/preferences/common/preferences';
 import { PreferencesEditorInput2 } from 'vs/workbench/services/preferences/common/preferencesEditorInput';
-import { IConfigurationService } from 'vs/platform/configuration/common/configuration';
+import { IConfigurationService, ConfigurationTarget } from 'vs/platform/configuration/common/configuration';
 import { DefaultSettingsEditorModel, SETTINGS_ENTRY_TEMPLATE_ID } from '../../../services/preferences/common/preferencesModels';
 import { SelectBox } from 'vs/base/browser/ui/selectBox/selectBox';
 import { Disposable, IDisposable, dispose } from 'vs/base/common/lifecycle';
@@ -37,7 +37,7 @@ import { InputBox } from 'vs/base/browser/ui/inputbox/inputBox';
 import { attachSelectBoxStyler, attachInputBoxStyler } from 'vs/platform/theme/common/styler';
 import { EDITOR_GROUP_HEADER_NO_TABS_BACKGROUND } from '../../../common/theme';
 import { editorBackground } from 'vs/platform/theme/common/colorRegistry';
-import { Color } from '../../../../base/common/color';
+import { Color } from 'vs/base/common/color';
 
 export interface IListEntry {
 	id: string;
@@ -63,6 +63,7 @@ export class SettingsEditor2 extends BaseEditor {
 
 	private headerContainer: HTMLElement;
 	private searchWidget: SearchWidget;
+	private settingsTargetsWidget: SettingsTargetsWidget;
 
 	private settingsListContainer: HTMLElement;
 	private listEntries: IListEntry[];
@@ -177,10 +178,17 @@ export class SettingsEditor2 extends BaseEditor {
 		}));
 		// this._register(this.searchWidget.onDidChange(searchValue => this.delayedFiltering.trigger(() => this.filterSettings())));
 
-		this.createOpenKeybindingsElement(this.headerContainer);
+		const headerControlsContainer = DOM.append(this.headerContainer, $('div.settings-header-controls-container'));
+		this.createOpenSettingsElement(headerControlsContainer);
+
+		const targetWidgetContainer = DOM.append(headerControlsContainer, $('.settings-target-container'));
+
+		this.settingsTargetsWidget = this._register(this.instantiationService.createInstance(SettingsTargetsWidget, targetWidgetContainer));
+		this.settingsTargetsWidget.settingsTarget = ConfigurationTarget.USER;
+		// this._register(this.settingsTargetsWidget.onDidTargetChange(target => this._onDidSettingsTargetChange.fire(target)));
 	}
 
-	private createOpenKeybindingsElement(parent: HTMLElement): void {
+	private createOpenSettingsElement(parent: HTMLElement): void {
 		const openSettingsContainer = DOM.append(parent, $('.open-settings-container'));
 		DOM.append(openSettingsContainer, $('', null, localize('header-message', "For advanced customizations open and edit")));
 		const fileElement = DOM.append(openSettingsContainer, $('.file-name', null, localize('settings-file-name', "settings.json")));

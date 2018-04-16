@@ -179,13 +179,11 @@ export class SettingsEditor2 extends BaseEditor {
 		// this._register(this.searchWidget.onDidChange(searchValue => this.delayedFiltering.trigger(() => this.filterSettings())));
 
 		const headerControlsContainer = DOM.append(this.headerContainer, $('div.settings-header-controls-container'));
-		this.createOpenSettingsElement(headerControlsContainer);
-
 		const targetWidgetContainer = DOM.append(headerControlsContainer, $('.settings-target-container'));
-
 		this.settingsTargetsWidget = this._register(this.instantiationService.createInstance(SettingsTargetsWidget, targetWidgetContainer));
 		this.settingsTargetsWidget.settingsTarget = ConfigurationTarget.USER;
-		// this._register(this.settingsTargetsWidget.onDidTargetChange(target => this._onDidSettingsTargetChange.fire(target)));
+
+		this.createOpenSettingsElement(headerControlsContainer);
 	}
 
 	private createOpenSettingsElement(parent: HTMLElement): void {
@@ -228,21 +226,14 @@ export class SettingsEditor2 extends BaseEditor {
 				keyboardSupport: false,
 				mouseSupport: false,
 				listFocusOutline: undefined,
-				listHoverBackground: undefined
+				listHoverBackground: undefined // Doesn't do anything
 			})
 		) as WorkbenchList<IListEntry>;
 
-		this.settingsList.style({ listHoverBackground: Color.transparent });
+		// Workaround global style that adds outline to lists (maybe that's needed)
+		this.settingsList.getHTMLElement().classList.add('element-focused');
 
-		// this._register(this.settingsList.onContextMenu(e => this.onContextMenu(e)));
-		// this._register(this.settingsList.onFocusChange(e => this.onFocusChange(e)));
-		this._register(this.settingsList.onDidFocus(() => {
-			DOM.addClass(this.settingsList.getHTMLElement(), 'focused');
-		}));
-		this._register(this.settingsList.onDidBlur(() => {
-			DOM.removeClass(this.settingsList.getHTMLElement(), 'focused');
-			// this.keybindingFocusContextKey.reset();
-		}));
+		this.settingsList.style({ listHoverBackground: Color.transparent, listFocusOutline: Color.transparent });
 	}
 
 	private render(preserveFocus?: boolean): TPromise<any> {

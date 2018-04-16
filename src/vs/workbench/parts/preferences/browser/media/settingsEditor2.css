@@ -30,14 +30,22 @@
 	padding-left:10px;
 }
 
-.settings-editor>.settings-header>.settings-header-controls-container {
+.settings-editor > .settings-header > .settings-header-controls-container {
 	margin-top: 7px;
 	display: flex;
 }
 
-.settings-editor > .settings-header .open-settings-container {
-	padding-top: 3px; /* compensate for 3px padding inside target widget, should be cleaned up */
+.settings-editor > .settings-header .settings-target-container {
 	flex: 1;
+}
+
+.settings-editor > .settings-header .settings-tabs-widget > .monaco-action-bar .action-item:not(:first-child) .action-label {
+	margin-left: 33px;
+}
+
+.settings-editor > .settings-header .open-settings-container {
+	/* compensate for 3px padding inside target widget, should be cleaned up */
+	padding-top: 3px;
 	display: flex;
 	opacity: 0.7;
 }
@@ -81,8 +89,8 @@
 	opacity: 0.8;
 }
 
-.settings-editor>.settings-body>.settings-list-container .monaco-list-row .setting-item-description {
-	opacity: 0.5;
+.settings-editor > .settings-body > .settings-list-container .monaco-list-row .setting-item-description {
+	opacity: 0.6;
 	margin-top: 6px;
 }
 
@@ -92,6 +100,7 @@
 }
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-select-box {
+	font-size: 12px;
 	width: initial;
 }
 

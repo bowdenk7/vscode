@@ -34,9 +34,11 @@ import { SearchWidget, SettingsTargetsWidget } from 'vs/workbench/parts/preferen
 import { IPreferencesService, ISetting } from 'vs/workbench/services/preferences/common/preferences';
 import { PreferencesEditorInput2 } from 'vs/workbench/services/preferences/common/preferencesEditorInput';
 import { DefaultSettingsEditorModel } from 'vs/workbench/services/preferences/common/preferencesModels';
+import { Button } from '../../../../base/browser/ui/button/button';
 
 const SETTINGS_ENTRY_TEMPLATE_ID = 'settings.entry.template';
 const SETTINGS_NAV_TEMPLATE_ID = 'settings.nav.template';
+const SETTINGS_GROUP_ENTRY_TEMPLATE_ID = 'settings.group.template';
 
 interface IListEntry {
 	id: string;
@@ -46,7 +48,9 @@ interface IListEntry {
 interface ISettingItemEntry extends IListEntry {
 	key: string;
 	value: any;
+	isConfigured: boolean;
 	description: string;
+	overriddenScopeList: string[];
 	type?: string | string[];
 	enum?: string[];
 }
@@ -54,6 +58,10 @@ interface ISettingItemEntry extends IListEntry {
 interface INavListEntry extends IListEntry {
 	title: string;
 	index: number;
+}
+
+interface IGroupTitleEntry extends IListEntry {
+	title: string;
 }
 
 let $ = DOM.$;
@@ -216,7 +224,7 @@ export class SettingsEditor2 extends BaseEditor {
 			WorkbenchList,
 			this.settingsListContainer,
 			new Delegate(),
-			[listRenderer],
+			[listRenderer, new GroupTitleRenderer()],
 			{
 				identityProvider: e => e.id,
 				ariaLabel: localize('settingsListLabel', "Settings"),
@@ -230,17 +238,6 @@ export class SettingsEditor2 extends BaseEditor {
 		) as WorkbenchList<IListEntry>;
 
 		this.settingsList.style({ listHoverBackground: Color.transparent, listFocusOutline: Color.transparent });
-		DOM.addClass(this.settingsList.getHTMLElement(), 'element-focused');
-
-		// this._register(this.settingsList.onContextMenu(e => this.onContextMenu(e)));
-		// this._register(this.settingsList.onFocusChange(e => this.onFocusChange(e)));
-		this._register(this.settingsList.onDidFocus(() => {
-			DOM.addClass(this.settingsList.getHTMLElement(), 'element-focused');
-		}));
-		// this._register(this.settingsList.onDidBlur(() => {
-		// 	DOM.removeClass(this.settingsList.getHTMLElement(), 'focused');
-		// 	// this.keybindingFocusContextKey.reset();
-		// }));
 	}
 
 	private onDidChangeSetting(key: string, value: any): void {
@@ -268,7 +265,7 @@ export class SettingsEditor2 extends BaseEditor {
 	private renderEntries(): void {
 		if (this.defaultSettingsEditorModel) {
 
-			const entries: ISettingItemEntry[] = [];
+			const entries: (ISettingItemEntry|IGroupTitleEntry)[] = [];
 			const navEntries: INavListEntry[] = [];
 			for (const groupIdx in this.defaultSettingsEditorModel.settingsGroups) {
 				const group = this.defaultSettingsEditorModel.settingsGroups[groupIdx];
@@ -277,6 +274,12 @@ export class SettingsEditor2 extends BaseEditor {
 					index: parseInt(groupIdx),
 					title: group.title,
 					templateId: SETTINGS_NAV_TEMPLATE_ID
+				});
+
+				entries.push(<IGroupTitleEntry>{
+					id: group.id,
+					templateId: SETTINGS_GROUP_ENTRY_TEMPLATE_ID,
+					title: group.title
 				});
 
 				for (const section of group.sections) {
@@ -294,12 +297,23 @@ export class SettingsEditor2 extends BaseEditor {
 	private settingToEntry(s: ISetting): ISettingItemEntry {
 		const targetSelector = this.settingsTargetsWidget.settingsTarget === ConfigurationTarget.USER ? 'user' : 'workspace';
 		const inspected = this.configurationService.inspect(s.key);
-		const displayValue = typeof inspected[targetSelector] === 'undefined' ? inspected.default : inspected[targetSelector];
+		const isConfigured = typeof inspected[targetSelector] !== 'undefined';
+		const displayValue = isConfigured ? inspected.default : inspected[targetSelector];
+		const overriddenScopeList = [];
+		if (targetSelector === 'user' && typeof inspected.workspace !== 'undefined') {
+			overriddenScopeList.push('workspace');
+		}
+
+		if (targetSelector === 'workspace' && typeof inspected.user !== 'undefined') {
+			overriddenScopeList.push('user');
+		}
 
 		return <ISettingItemEntry>{
 			id: s.key,
 			key: s.key,
 			value: displayValue,
+			isConfigured,
+			overriddenScopeList,
 			description: s.description.join('\n'),
 			enum: s.enum,
 			type: s.type,
@@ -344,7 +358,10 @@ export class SettingsEditor2 extends BaseEditor {
 class Delegate implements IDelegate<IListEntry> {
 
 	getHeight(element: IListEntry) {
-		return element.templateId === SETTINGS_NAV_TEMPLATE_ID ? 25 : 110;
+		return element.templateId === SETTINGS_NAV_TEMPLATE_ID ? 25 :
+			element.templateId === SETTINGS_ENTRY_TEMPLATE_ID ? 110 :
+			element.templateId === SETTINGS_GROUP_ENTRY_TEMPLATE_ID ? 60 :
+			100;
 	}
 
 	getTemplateId(element: IListEntry) {
@@ -361,6 +378,8 @@ interface ISettingItemTemplate {
 	keyElement: HTMLElement;
 	descriptionElement: HTMLElement;
 	valueElement: HTMLElement;
+	resetElement: HTMLElement;
+	overridesElement: HTMLElement;
 }
 
 interface INavItemTemplate {
@@ -369,13 +388,22 @@ interface INavItemTemplate {
 	labelElement: HTMLElement;
 }
 
+interface IGroupTitleItemTemplate {
+	parent: HTMLElement;
+
+	labelElement: HTMLElement;
+}
+
 interface ISettingChangeEvent {
 	key: string;
-	value: any;
+	value: any; // undefined => reset unconfigure
 }
 
 class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTemplate> {
 
+	/**
+	 * TODO@roblou This shouldn't exist. List items should have actions or something
+	 */
 	private readonly _onDidChangeSetting: Emitter<ISettingChangeEvent> = new Emitter<ISettingChangeEvent>();
 	public readonly onDidChangeSetting: Event<ISettingChangeEvent> = this._onDidChangeSetting.event;
 
@@ -396,7 +424,10 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 		const descriptionElement = $('div.setting-item-description');
 		const valueElement = $('div.setting-item-value');
 
-		const itemContainer = $('div.setting-item-container', undefined, titleElement, descriptionElement, valueElement);
+		const resetElement = $('div.setting-item-reset');
+		const overridesElement = $('div.setting-item-overrides');
+
+		const itemContainer = $('div.setting-item-container', undefined, titleElement, descriptionElement, valueElement, resetElement, overridesElement);
 
 		return {
 			parent: parent,
@@ -406,7 +437,9 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 			keyElement,
 			labelElement,
 			descriptionElement,
-			valueElement
+			valueElement,
+			resetElement,
+			overridesElement
 		};
 	}
 
@@ -416,6 +449,12 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 		template.keyElement.textContent = entry.key;
 		template.labelElement.textContent = settingKeyToLabel(entry.key);
 		template.descriptionElement.textContent = entry.description;
+
+		const resetButton = new Button(template.resetElement);
+		template.toDispose.push(resetButton.onDidClick(e => {
+			this._onDidChangeSetting.fire({ key: entry.key, value: undefined });
+		}));
+		template.toDispose.push(resetButton);
 
 		this.renderValue(entry, template);
 	}
@@ -472,6 +511,32 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 
 		template.toDispose.push(
 			inputBox.onDidChange(e => onChange(e)));
+	}
+
+	disposeTemplate(template: ISettingItemTemplate): void {
+		dispose(template.toDispose);
+	}
+}
+
+class GroupTitleRenderer implements IRenderer<IGroupTitleEntry, IGroupTitleItemTemplate> {
+
+	get templateId(): string { return SETTINGS_GROUP_ENTRY_TEMPLATE_ID; }
+
+	constructor(
+	) { }
+
+	renderTemplate(parent: HTMLElement): INavItemTemplate {
+		DOM.addClass(parent, 'group-title');
+
+		const labelElement = DOM.append(parent, $('h2.group-title-label'));
+		return {
+			parent: parent,
+			labelElement
+		};
+	}
+
+	renderElement(entry: IGroupTitleEntry, index: number, template: IGroupTitleItemTemplate): void {
+		template.labelElement.textContent = entry.title;
 	}
 
 	disposeTemplate(template: ISettingItemTemplate): void {

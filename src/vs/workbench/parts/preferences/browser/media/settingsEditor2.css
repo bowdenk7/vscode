@@ -66,6 +66,10 @@
 	width: 200px;
 }
 
+.settings-editor > .settings-body .settings-list-container .monaco-list::before {
+	outline: none !important;
+}
+
 .settings-editor > .settings-body .settings-list-container {
 	flex: 1;
 	border-spacing: 0;
@@ -86,7 +90,7 @@
 }
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .setting-item-label {
-	font-size: 16px;
+	font-size: 15px;
 	font-weight: bold;
 }
 
@@ -114,6 +118,8 @@
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-custom-checkbox.unchecked {
 	background: url("action-remove.svg") center center no-repeat;
+	/* Unchecked border style needs to be stylable on checkbox. Themeable? */
+	border-color: #75715e !important;
 }
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-custom-checkbox.checked {

@@ -101,9 +101,6 @@
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-select-box {
 	width: initial;
-}
-
-.settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-select-box select {
 	font-size: 12px;
 }
 

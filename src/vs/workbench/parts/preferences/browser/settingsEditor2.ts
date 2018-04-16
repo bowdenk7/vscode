@@ -5,40 +5,37 @@
 
 import * as DOM from 'vs/base/browser/dom';
 import { StandardKeyboardEvent } from 'vs/base/browser/keyboardEvent';
-import { IDelegate, IListContextMenuEvent, IListEvent, IRenderer } from 'vs/base/browser/ui/list/list';
+import { Checkbox } from 'vs/base/browser/ui/checkbox/checkbox';
+import { InputBox } from 'vs/base/browser/ui/inputbox/inputBox';
+import { IDelegate, IRenderer } from 'vs/base/browser/ui/list/list';
 import { List } from 'vs/base/browser/ui/list/listWidget';
+import { SelectBox } from 'vs/base/browser/ui/selectBox/selectBox';
 import { IAction } from 'vs/base/common/actions';
 import { Delayer } from 'vs/base/common/async';
+import { Color } from 'vs/base/common/color';
+import { Emitter, Event } from 'vs/base/common/event';
 import { KeyCode } from 'vs/base/common/keyCodes';
+import { IDisposable, dispose } from 'vs/base/common/lifecycle';
 import { TPromise } from 'vs/base/common/winjs.base';
 import 'vs/css!./media/settingsEditor2';
 import { localize } from 'vs/nls';
+import { ConfigurationTarget, IConfigurationService } from 'vs/platform/configuration/common/configuration';
 import { IContextKey } from 'vs/platform/contextkey/common/contextkey';
 import { IContextMenuService, IContextViewService } from 'vs/platform/contextview/browser/contextView';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
 import { WorkbenchList } from 'vs/platform/list/browser/listService';
+import { INotificationService } from 'vs/platform/notification/common/notification';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
+import { attachInputBoxStyler, attachSelectBoxStyler } from 'vs/platform/theme/common/styler';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { EditorOptions } from 'vs/workbench/common/editor';
-import { SearchWidget, SettingsTargetsWidget, SettingsTarget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
+import { SearchWidget, SettingsTargetsWidget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
 import { KEYBINDINGS_EDITOR_SHOW_DEFAULT_KEYBINDINGS, KEYBINDINGS_EDITOR_SHOW_USER_KEYBINDINGS } from 'vs/workbench/parts/preferences/common/preferences';
-import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
-import { IKeybindingItemEntry, IListEntry, KEYBINDING_ENTRY_TEMPLATE_ID, KEYBINDING_HEADER_TEMPLATE_ID } from 'vs/workbench/services/preferences/common/keybindingsEditorModel';
+import { IKeybindingItemEntry, IListEntry } from 'vs/workbench/services/preferences/common/keybindingsEditorModel';
 import { IPreferencesService, ISetting } from 'vs/workbench/services/preferences/common/preferences';
 import { PreferencesEditorInput2 } from 'vs/workbench/services/preferences/common/preferencesEditorInput';
-import { IConfigurationService, ConfigurationTarget } from 'vs/platform/configuration/common/configuration';
-import { DefaultSettingsEditorModel, SETTINGS_ENTRY_TEMPLATE_ID } from '../../../services/preferences/common/preferencesModels';
-import { SelectBox } from 'vs/base/browser/ui/selectBox/selectBox';
-import { Disposable, IDisposable, dispose } from 'vs/base/common/lifecycle';
-import { INotificationService } from 'vs/platform/notification/common/notification';
-import { Checkbox } from 'vs/base/browser/ui/checkbox/checkbox';
-import { InputBox } from 'vs/base/browser/ui/inputbox/inputBox';
-import { attachSelectBoxStyler, attachInputBoxStyler } from 'vs/platform/theme/common/styler';
-import { EDITOR_GROUP_HEADER_NO_TABS_BACKGROUND } from '../../../common/theme';
-import { editorBackground } from 'vs/platform/theme/common/colorRegistry';
-import { Color } from 'vs/base/common/color';
-import { Emitter, Event } from 'vs/base/common/event';
+import { DefaultSettingsEditorModel, SETTINGS_ENTRY_TEMPLATE_ID, iterateSettings } from 'vs/workbench/services/preferences/common/preferencesModels';
 
 export interface IListEntry {
 	id: string;
@@ -112,7 +109,7 @@ export class SettingsEditor2 extends BaseEditor {
 		return super.setInput(input)
 			.then(() => {
 				if (!input.matches(oldInput)) {
-					this.render(options && options.preserveFocus);
+					this.render();
 				}
 			});
 	}
@@ -277,75 +274,40 @@ export class SettingsEditor2 extends BaseEditor {
 
 	private renderEntries(): void {
 		if (this.defaultSettingsEditorModel) {
-			const targetSelector = this.settingsTargetsWidget.settingsTarget === ConfigurationTarget.USER ? 'user' : 'workspace';
-			const entries: ISettingItemEntry[] = this.defaultSettingsEditorModel.settingsGroups[0].sections[0].settings.map(s => {
-				const inspected = this.configurationService.inspect(s.key);
-				const displayValue = typeof inspected[targetSelector] === 'undefined' ? inspected.default : inspected[targetSelector];
 
-				return <ISettingItemEntry>{
-					id: s.key,
-					key: s.key,
-					value: displayValue,
-					description: s.description.join('\n'),
-					enum: s.enum,
-					type: s.type,
-					templateId: SETTINGS_ENTRY_TEMPLATE_ID
-				};
-			});
+			const entries: ISettingItemEntry[] = [];
+			for (const group of this.defaultSettingsEditorModel.settingsGroups) {
+				for (const section of group.sections) {
+					for (const setting of section.settings) {
+						entries.push(this.settingToEntry(setting));
+					}
+				}
+			}
 
 			this.settingsList.splice(0, this.settingsList.length, entries);
 		}
+	}
+
+	private settingToEntry(s: ISetting): ISettingItemEntry {
+		const targetSelector = this.settingsTargetsWidget.settingsTarget === ConfigurationTarget.USER ? 'user' : 'workspace';
+		const inspected = this.configurationService.inspect(s.key);
+		const displayValue = typeof inspected[targetSelector] === 'undefined' ? inspected.default : inspected[targetSelector];
+
+		return <ISettingItemEntry>{
+			id: s.key,
+			key: s.key,
+			value: displayValue,
+			description: s.description.join('\n'),
+			enum: s.enum,
+			type: s.type,
+			templateId: SETTINGS_ENTRY_TEMPLATE_ID
+		};
 	}
 
 	private layoutSettingsList(): void {
 		const listHeight = this.dimension.height - (DOM.getDomNodePagePosition(this.headerContainer).height + 12 /*padding*/);
 		this.settingsListContainer.style.height = `${listHeight}px`;
 		this.settingsList.layout(listHeight);
-	}
-
-	private getIndexOf(listEntry: IListEntry): number {
-		const index = this.listEntries.indexOf(listEntry);
-		if (index === -1) {
-			for (let i = 0; i < this.listEntries.length; i++) {
-				if (this.listEntries[i].id === listEntry.id) {
-					return i;
-				}
-			}
-		}
-		return index;
-	}
-
-	private onContextMenu(e: IListContextMenuEvent<IListEntry>): void {
-		// if (e.element.templateId === KEYBINDING_ENTRY_TEMPLATE_ID) {
-		// 	this.contextMenuService.showContextMenu({
-		// 		getAnchor: () => e.anchor,
-		// 		getActions: () => TPromise.as([
-		// 			// this.createCopyAction(<IKeybindingItemEntry>e.element),
-		// 			// this.createCopyCommandAction(<IKeybindingItemEntry>e.element),
-		// 			// new Separator(),
-		// 			// this.createDefineAction(<IKeybindingItemEntry>e.element),
-		// 			// this.createRemoveAction(<IKeybindingItemEntry>e.element),
-		// 			// this.createResetAction(<IKeybindingItemEntry>e.element),
-		// 			// new Separator(),
-		// 			// this.createShowConflictsAction(<IKeybindingItemEntry>e.element)
-		// 		])
-		// 	});
-		// }
-	}
-
-	private onFocusChange(e: IListEvent<IListEntry>): void {
-		this.keybindingFocusContextKey.reset();
-		const element = e.elements[0];
-		if (!element) {
-			return;
-		}
-		if (element.templateId === KEYBINDING_HEADER_TEMPLATE_ID) {
-			this.settingsList.focusNext();
-			return;
-		}
-		if (element.templateId === KEYBINDING_ENTRY_TEMPLATE_ID) {
-			this.keybindingFocusContextKey.set(true);
-		}
 	}
 
 	private reportFilteringUsed(filter: string): void {

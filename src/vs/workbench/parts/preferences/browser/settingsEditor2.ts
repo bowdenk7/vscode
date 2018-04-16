@@ -230,10 +230,17 @@ export class SettingsEditor2 extends BaseEditor {
 			})
 		) as WorkbenchList<IListEntry>;
 
-		// Workaround global style that adds outline to lists (maybe that's needed)
-		this.settingsList.getHTMLElement().classList.add('element-focused');
-
 		this.settingsList.style({ listHoverBackground: Color.transparent, listFocusOutline: Color.transparent });
+
+		// this._register(this.settingsList.onContextMenu(e => this.onContextMenu(e)));
+		// this._register(this.settingsList.onFocusChange(e => this.onFocusChange(e)));
+		this._register(this.settingsList.onDidFocus(() => {
+			DOM.addClass(this.settingsList.getHTMLElement(), 'element-focused');
+		}));
+		// this._register(this.settingsList.onDidBlur(() => {
+		// 	DOM.removeClass(this.settingsList.getHTMLElement(), 'focused');
+		// 	// this.keybindingFocusContextKey.reset();
+		// }));
 	}
 
 	private render(preserveFocus?: boolean): TPromise<any> {

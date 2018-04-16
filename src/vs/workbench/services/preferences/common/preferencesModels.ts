@@ -470,7 +470,9 @@ export class DefaultSettings extends Disposable {
 					value: setting.value,
 					range: null,
 					valueRange: null,
-					overrides: []
+					overrides: [],
+					type: setting.type,
+					enum: setting.enum
 				};
 			}
 			return null;
@@ -537,14 +539,14 @@ export class DefaultSettings extends Disposable {
 	}
 
 	private parseSettings(settingsObject: { [path: string]: IConfigurationPropertySchema; }): ISetting[] {
-		let result = [];
+		let result: ISetting[] = [];
 		for (let key in settingsObject) {
 			const prop = settingsObject[key];
 			if (!prop.deprecationMessage && this.matchesScope(prop)) {
 				const value = prop.default;
 				const description = (prop.description || '').split('\n');
 				const overrides = OVERRIDE_PROPERTY_PATTERN.test(key) ? this.parseOverrideSettings(prop.default) : [];
-				result.push({ key, value, description, range: null, keyRange: null, valueRange: null, descriptionRanges: [], overrides });
+				result.push({ key, value, description, range: null, keyRange: null, valueRange: null, descriptionRanges: [], overrides, type: prop.type, enum: prop.enum });
 			}
 		}
 		return result;
@@ -595,6 +597,9 @@ export class DefaultSettings extends Disposable {
 	}
 
 }
+
+export const SETTINGS_ENTRY_TEMPLATE_ID = 'settings.entry.template';
+export const SETTINGS_HEADER_TEMPLATE_ID = 'settings.header.template';
 
 export class DefaultSettingsEditorModel extends AbstractSettingsModel implements ISettingsEditorModel {
 

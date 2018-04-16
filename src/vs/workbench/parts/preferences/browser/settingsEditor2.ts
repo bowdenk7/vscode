@@ -21,7 +21,7 @@ import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { EditorOptions } from 'vs/workbench/common/editor';
-import { SearchWidget, SettingsTargetsWidget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
+import { SearchWidget, SettingsTargetsWidget, SettingsTarget } from 'vs/workbench/parts/preferences/browser/preferencesWidgets';
 import { KEYBINDINGS_EDITOR_SHOW_DEFAULT_KEYBINDINGS, KEYBINDINGS_EDITOR_SHOW_USER_KEYBINDINGS } from 'vs/workbench/parts/preferences/common/preferences';
 import { IWorkbenchEditorService } from 'vs/workbench/services/editor/common/editorService';
 import { IKeybindingItemEntry, IListEntry, KEYBINDING_ENTRY_TEMPLATE_ID, KEYBINDING_HEADER_TEMPLATE_ID } from 'vs/workbench/services/preferences/common/keybindingsEditorModel';
@@ -38,6 +38,7 @@ import { attachSelectBoxStyler, attachInputBoxStyler } from 'vs/platform/theme/c
 import { EDITOR_GROUP_HEADER_NO_TABS_BACKGROUND } from '../../../common/theme';
 import { editorBackground } from 'vs/platform/theme/common/colorRegistry';
 import { Color } from 'vs/base/common/color';
+import { Emitter, Event } from 'vs/base/common/event';
 
 export interface IListEntry {
 	id: string;
@@ -45,7 +46,11 @@ export interface IListEntry {
 }
 
 export interface ISettingItemEntry extends IListEntry {
-	settingItem: ISetting;
+	key: string;
+	value: any;
+	description: string;
+	type?: string | string[];
+	enum?: string[];
 }
 
 export interface ISettingItem {
@@ -79,10 +84,11 @@ export class SettingsEditor2 extends BaseEditor {
 
 	constructor(
 		@ITelemetryService telemetryService: ITelemetryService,
-		@IConfigurationService configurationService: IConfigurationService,
+		@IConfigurationService private configurationService: IConfigurationService,
 		@IThemeService themeService: IThemeService,
 		@IContextMenuService contextMenuService: IContextMenuService,
 		@IPreferencesService private preferencesService: IPreferencesService,
+		@INotificationService private notificationService: INotificationService,
 		@IInstantiationService private instantiationService: IInstantiationService
 	) {
 		super(SettingsEditor2.ID, telemetryService, themeService);
@@ -182,6 +188,7 @@ export class SettingsEditor2 extends BaseEditor {
 		const targetWidgetContainer = DOM.append(headerControlsContainer, $('.settings-target-container'));
 		this.settingsTargetsWidget = this._register(this.instantiationService.createInstance(SettingsTargetsWidget, targetWidgetContainer));
 		this.settingsTargetsWidget.settingsTarget = ConfigurationTarget.USER;
+		this.settingsTargetsWidget.onDidTargetChange(e => this.renderEntries());
 
 		this.createOpenSettingsElement(headerControlsContainer);
 	}
@@ -213,11 +220,13 @@ export class SettingsEditor2 extends BaseEditor {
 	private createList(parent: HTMLElement): void {
 		this.settingsListContainer = DOM.append(parent, $('.settings-list-container'));
 
+		const listRenderer = this.instantiationService.createInstance(SettingItemRenderer);
+		listRenderer.onDidChangeSetting(e => this.onDidChangeSetting(e.key, e.value));
 		this.settingsList = this._register(this.instantiationService.createInstance(
 			WorkbenchList,
 			this.settingsListContainer,
 			new Delegate(),
-			[this.instantiationService.createInstance(SettingItemRenderer)],
+			[listRenderer],
 			{
 				identityProvider: e => e.id,
 				ariaLabel: localize('settingsListLabel', "Settings"),
@@ -231,6 +240,7 @@ export class SettingsEditor2 extends BaseEditor {
 		) as WorkbenchList<IListEntry>;
 
 		this.settingsList.style({ listHoverBackground: Color.transparent, listFocusOutline: Color.transparent });
+		DOM.addClass(this.settingsList.getHTMLElement(), 'element-focused');
 
 		// this._register(this.settingsList.onContextMenu(e => this.onContextMenu(e)));
 		// this._register(this.settingsList.onFocusChange(e => this.onFocusChange(e)));
@@ -243,27 +253,45 @@ export class SettingsEditor2 extends BaseEditor {
 		// }));
 	}
 
-	private render(preserveFocus?: boolean): TPromise<any> {
+	private onDidChangeSetting(key: string, value: any): void {
+		this.configurationService.updateValue(key, value, <ConfigurationTarget>this.settingsTargetsWidget.settingsTarget).then(
+			null,
+			e => {
+				this.notificationService.error('Setting update failed: ' + e.message);
+			});
+	}
+
+	private render(): TPromise<any> {
 		if (this.input) {
 			return this.input.resolve()
 				.then((model: DefaultSettingsEditorModel) => this.defaultSettingsEditorModel = model)
-				.then(() => this.renderEntries(false, preserveFocus));
+				.then(() => this.renderEntries());
 		}
 		return TPromise.as(null);
 	}
 
 	private filterSettings(): void {
-		this.renderEntries(this.searchWidget.hasFocus());
+		this.renderEntries();
 		this.delayedFilterLogging.trigger(() => this.reportFilteringUsed(this.searchWidget.getValue()));
 	}
 
-	private renderEntries(reset: boolean, preserveFocus?: boolean): void {
+	private renderEntries(): void {
 		if (this.defaultSettingsEditorModel) {
-		const entries: ISettingItemEntry[] = this.defaultSettingsEditorModel.settingsGroups[0].sections[0].settings.map(s => (<ISettingItemEntry>{
-				id: '' + Math.random(),
-				settingItem: s,
-				templateId: SETTINGS_ENTRY_TEMPLATE_ID
-			}));
+			const targetSelector = this.settingsTargetsWidget.settingsTarget === ConfigurationTarget.USER ? 'user' : 'workspace';
+			const entries: ISettingItemEntry[] = this.defaultSettingsEditorModel.settingsGroups[0].sections[0].settings.map(s => {
+				const inspected = this.configurationService.inspect(s.key);
+				const displayValue = typeof inspected[targetSelector] === 'undefined' ? inspected.default : inspected[targetSelector];
+
+				return <ISettingItemEntry>{
+					id: s.key,
+					key: s.key,
+					value: displayValue,
+					description: s.description.join('\n'),
+					enum: s.enum,
+					type: s.type,
+					templateId: SETTINGS_ENTRY_TEMPLATE_ID
+				};
+			});
 
 			this.settingsList.splice(0, this.settingsList.length, entries);
 		}
@@ -369,14 +397,20 @@ interface SettingItemTemplate {
 	valueElement: HTMLElement;
 }
 
+interface ISettingChangeEvent {
+	key: string;
+	value: any;
+}
+
 class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTemplate> {
+
+	private readonly _onDidChangeSetting: Emitter<ISettingChangeEvent> = new Emitter<ISettingChangeEvent>();
+	public readonly onDidChangeSetting: Event<ISettingChangeEvent> = this._onDidChangeSetting.event;
 
 	get templateId(): string { return SETTINGS_ENTRY_TEMPLATE_ID; }
 
 	constructor(
 		@IContextViewService private contextViewService: IContextViewService,
-		@INotificationService private notificationService: INotificationService,
-		@IConfigurationService private configurationService: IConfigurationService,
 		@IThemeService private themeService: IThemeService
 	) { }
 
@@ -404,29 +438,27 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		};
 	}
 
-	renderElement(settingEntry: ISettingItemEntry, index: number, template: SettingItemTemplate): void {
+	renderElement(entry: ISettingItemEntry, index: number, template: SettingItemTemplate): void {
 		DOM.toggleClass(template.parent, 'odd', index % 2 === 1);
 
-		const item = settingEntry.settingItem;
+		template.keyElement.textContent = entry.key;
+		template.labelElement.textContent = settingKeyToLabel(entry.key);
+		template.descriptionElement.textContent = entry.description;
 
-		template.keyElement.textContent = item.key;
-		template.labelElement.textContent = settingKeyToLabel(item.key);
-		template.descriptionElement.textContent = item.description.join('\n');
-
-		this.renderValue(item, template);
+		this.renderValue(entry, template);
 	}
 
-	private renderValue(item: ISetting, template: SettingItemTemplate): void {
-		const onChange = value => this.onValueEdit(item.key, value);
+	private renderValue(entry: ISettingItemEntry, template: SettingItemTemplate): void {
+		const onChange = value => this._onDidChangeSetting.fire({ key: entry.key, value });
 		template.valueElement.innerHTML = '';
-		if (item.type === 'string' && item.enum) {
-			this.renderEnum(item, template, onChange);
-		} else if (item.type === 'boolean') {
-			this.renderBool(item, template, onChange);
-		} else if (item.type === 'string') {
-			this.renderText(item, template, onChange);
-		} else if (item.type === 'number') {
-			this.renderText(item, template, value => onChange(parseInt(value)));
+		if (entry.type === 'string' && entry.enum) {
+			this.renderEnum(entry, template, onChange);
+		} else if (entry.type === 'boolean') {
+			this.renderBool(entry, template, onChange);
+		} else if (entry.type === 'string') {
+			this.renderText(entry, template, onChange);
+		} else if (entry.type === 'number') {
+			this.renderText(entry, template, value => onChange(parseInt(value)));
 		} else {
 			template.valueElement.textContent = 'Edit in settings.json!';
 		}
@@ -434,18 +466,10 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		template.parent.appendChild(template.containerElement);
 	}
 
-	private onValueEdit(key: string, value: any): void {
-		this.configurationService.updateValue(key, value).then(
-			null,
-			e => {
-				this.notificationService.error('Setting update failed: ' + e.message);
-			});
-	}
-
-	private renderBool(item: ISetting, template: SettingItemTemplate, onChange: (value: boolean) => void): void {
+	private renderBool(entry: ISettingItemEntry, template: SettingItemTemplate, onChange: (value: boolean) => void): void {
 		const checkbox = new Checkbox({
-			isChecked: this.configurationService.getValue(item.key),
-			title: item.key,
+			isChecked: entry.value,
+			title: entry.key,
 			onChange: e => onChange(e.valueOf()),
 			actionClassName: 'setting-value-checkbox'
 		});
@@ -454,9 +478,9 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		template.valueElement.appendChild(checkbox.domNode);
 	}
 
-	private renderEnum(item: ISetting, template: SettingItemTemplate, onChange: (value: string) => void): void {
-		const defaultIdx = item.enum.indexOf(this.configurationService.getValue(item.key));
-		const selectBox = new SelectBox(item.enum, defaultIdx, this.contextViewService);
+	private renderEnum(entry: ISettingItemEntry, template: SettingItemTemplate, onChange: (value: string) => void): void {
+		const idx = entry.enum.indexOf(entry.value);
+		const selectBox = new SelectBox(entry.enum, idx, this.contextViewService);
 		template.toDispose.push(selectBox);
 		template.toDispose.push(attachSelectBoxStyler(selectBox, this.themeService, {
 			// selectBackground: editorBackground
@@ -464,15 +488,15 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		selectBox.render(template.valueElement);
 
 		template.toDispose.push(
-			selectBox.onDidSelect(e => onChange(item.enum[e.index])));
+			selectBox.onDidSelect(e => onChange(entry.enum[e.index])));
 	}
 
-	private renderText(item: ISetting, template: SettingItemTemplate, onChange: (value: string) => void): void {
+	private renderText(entry: ISettingItemEntry, template: SettingItemTemplate, onChange: (value: string) => void): void {
 		const inputBox = new InputBox(template.valueElement, this.contextViewService);
 		template.toDispose.push(attachInputBoxStyler(inputBox, this.themeService, {
 		}));
 		template.toDispose.push(inputBox);
-		inputBox.value = this.configurationService.getValue(item.key);
+		inputBox.value = entry.value;
 
 		template.toDispose.push(
 			inputBox.onDidChange(e => onChange(e)));

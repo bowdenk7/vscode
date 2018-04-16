@@ -100,8 +100,11 @@
 }
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-select-box {
-	font-size: 12px;
 	width: initial;
+}
+
+.settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-select-box select {
+	font-size: 12px;
 }
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-custom-checkbox.unchecked {

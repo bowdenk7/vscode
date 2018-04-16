@@ -194,12 +194,12 @@ export class SettingsEditor2 extends BaseEditor {
 		const fileElement = DOM.append(openSettingsContainer, $('.file-name', null, localize('settings-file-name', "settings.json")));
 		fileElement.tabIndex = 0;
 
-		this._register(DOM.addDisposableListener(fileElement, DOM.EventType.CLICK, () => this.preferencesService.openGlobalKeybindingSettings(true)));
+		this._register(DOM.addDisposableListener(fileElement, DOM.EventType.CLICK, () => this.preferencesService.openGlobalSettings()));
 		this._register(DOM.addDisposableListener(fileElement, DOM.EventType.KEY_UP, e => {
 			let keyboardEvent = new StandardKeyboardEvent(e);
 			switch (keyboardEvent.keyCode) {
 				case KeyCode.Enter:
-					this.preferencesService.openGlobalKeybindingSettings(true);
+					this.preferencesService.openGlobalSettings();
 					keyboardEvent.preventDefault();
 					keyboardEvent.stopPropagation();
 					return;
@@ -428,7 +428,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 		} else if (item.type === 'string') {
 			this.renderText(item, template, onChange);
 		} else if (item.type === 'number') {
-			this.renderText(item, template, onChange);
+			this.renderText(item, template, value => onChange(parseInt(value)));
 		} else {
 			template.valueElement.textContent = 'Edit in settings.json!';
 		}
@@ -469,7 +469,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, SettingItemTem
 			selectBox.onDidSelect(e => onChange(item.enum[e.index])));
 	}
 
-	private renderText(item: ISetting, template: SettingItemTemplate, onChange: (value: string|number) => void): void {
+	private renderText(item: ISetting, template: SettingItemTemplate, onChange: (value: string) => void): void {
 		const inputBox = new InputBox(template.valueElement, this.contextViewService);
 		template.toDispose.push(attachInputBoxStyler(inputBox, this.themeService, {
 		}));

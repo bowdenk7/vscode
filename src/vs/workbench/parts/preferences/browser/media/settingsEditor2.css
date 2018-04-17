@@ -56,7 +56,10 @@
 	margin-left: 4px;
 }
 
-/** List based styling **/
+.settings-editor > .settings-body .settings-list-container .settings-list-offset-helper {
+	opacity: 0;
+	position: absolute;
+}
 
 .settings-editor > .settings-body {
 	display: flex;
@@ -86,6 +89,7 @@
 }
 
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row.setting-item {
+	padding: 3px 0px;
 	margin-left: 10px;
 }
 

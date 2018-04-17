@@ -207,7 +207,7 @@ export class SettingsEditor2 extends BaseEditor {
 		this.navList = <WorkbenchList<IListEntry>>this._register(this.instantiationService.createInstance(
 			WorkbenchList,
 			this.navListContainer,
-			new Delegate(),
+			new NavItemDelegate(),
 			[listRenderer],
 			{
 				identityProvider: e => e.id,
@@ -218,13 +218,13 @@ export class SettingsEditor2 extends BaseEditor {
 	private createList(parent: HTMLElement): void {
 		this.settingsListContainer = DOM.append(parent, $('.settings-list-container'));
 
-		const listRenderer = this.instantiationService.createInstance(SettingItemRenderer);
-		listRenderer.onDidChangeSetting(e => this.onDidChangeSetting(e.key, e.value));
+		const settingItemRenderer = this.instantiationService.createInstance(SettingItemRenderer);
+		settingItemRenderer.onDidChangeSetting(e => this.onDidChangeSetting(e.key, e.value));
 		this.settingsList = this._register(this.instantiationService.createInstance(
 			WorkbenchList,
 			this.settingsListContainer,
-			new Delegate(),
-			[listRenderer, new GroupTitleRenderer()],
+			new SettingItemDelegate(this.settingsListContainer, settingItemRenderer),
+			[settingItemRenderer, new GroupTitleRenderer()],
 			{
 				identityProvider: e => e.id,
 				ariaLabel: localize('settingsListLabel', "Settings"),
@@ -244,7 +244,7 @@ export class SettingsEditor2 extends BaseEditor {
 		this.configurationService.updateValue(key, value, <ConfigurationTarget>this.settingsTargetsWidget.settingsTarget).then(
 			null,
 			e => {
-				this.notificationService.error('Setting update failed: ' + e.message);
+				// ConfigurationService displays the error
 			});
 	}
 
@@ -355,13 +355,48 @@ export class SettingsEditor2 extends BaseEditor {
 	}
 }
 
-class Delegate implements IDelegate<IListEntry> {
+class SettingItemDelegate implements IDelegate<IListEntry> {
 
-	getHeight(element: IListEntry) {
-		return element.templateId === SETTINGS_NAV_TEMPLATE_ID ? 25 :
-			element.templateId === SETTINGS_ENTRY_TEMPLATE_ID ? 110 :
-			element.templateId === SETTINGS_GROUP_ENTRY_TEMPLATE_ID ? 60 :
-			100;
+	private offsetHelper: HTMLElement;
+
+	constructor(
+		container: HTMLElement,
+		private settingItemRenderer: SettingItemRenderer
+	) {
+		this.offsetHelper = DOM.append(container, $('div.settings-list-offset-helper.monaco-list-row'));
+	}
+
+	getHeight(entry: ISettingItemEntry) {
+		if (entry.templateId === SETTINGS_GROUP_ENTRY_TEMPLATE_ID) {
+			return 60;
+		}
+
+		if (entry.templateId === SETTINGS_ENTRY_TEMPLATE_ID) {
+			// dynamic height
+			const template = this.settingItemRenderer.renderTemplate(this.offsetHelper);
+			this.settingItemRenderer.renderElement(entry, 0, template);
+
+			const height = template.parent.offsetHeight;
+			DOM.clearNode(this.offsetHelper);
+			return height;
+		}
+
+		return 0;
+	}
+
+	getTemplateId(element: IListEntry) {
+		return element.templateId;
+	}
+}
+
+class NavItemDelegate implements IDelegate<IListEntry> {
+
+	getHeight(entry: IListEntry) {
+		if (entry.templateId === SETTINGS_NAV_TEMPLATE_ID) {
+			return 25;
+		}
+
+		return 0;
 	}
 
 	getTemplateId(element: IListEntry) {

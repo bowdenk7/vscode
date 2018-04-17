@@ -77,6 +77,7 @@ export class SettingsEditor2 extends BaseEditor {
 	private settingsTargetsWidget: SettingsTargetsWidget;
 
 	private showConfiguredSettingsOnly = false;
+	private showAllSettings = false;
 
 	private settingsListContainer: HTMLElement;
 	private navListContainer: HTMLElement;
@@ -223,7 +224,8 @@ export class SettingsEditor2 extends BaseEditor {
 
 	private createNavControls(parent: HTMLElement): void {
 		const navControls = DOM.append(parent, $('.settings-nav-controls'));
-		const label = DOM.append(navControls, $('span.settings-nav-controls-label'));
+		const configuredOnlyContainer = DOM.append(navControls, $('.settings-nav-controls-configured-only'));
+		const label = DOM.append(configuredOnlyContainer, $('span.settings-nav-controls-label.settings-nav-controls-configured-only'));
 		label.textContent = 'Show configured settings only';
 
 		const configuredOnlyCheckbox = new Checkbox({
@@ -236,7 +238,23 @@ export class SettingsEditor2 extends BaseEditor {
 			title: 'Show configured settings only'
 		});
 
-		navControls.appendChild(configuredOnlyCheckbox.domNode);
+		configuredOnlyContainer.appendChild(configuredOnlyCheckbox.domNode);
+
+		const allSettingsContainer = DOM.append(navControls, $('.settings-nav-controls-all-settings'));
+		const allSettingsLabel = DOM.append(allSettingsContainer, $('span.settings-nav-controls-label'));
+		allSettingsLabel.textContent = 'Show all settings';
+
+		const allSettingsCheckbox = new Checkbox({
+			isChecked: this.showAllSettings,
+			onChange: e => {
+				this.showAllSettings = allSettingsCheckbox.checked;
+				this.render();
+			},
+			actionClassName: 'settings-nav-checkbox',
+			title: 'Show all settings'
+		});
+
+		allSettingsContainer.appendChild(allSettingsCheckbox.domNode);
 	}
 
 	private createList(parent: HTMLElement): void {
@@ -266,7 +284,7 @@ export class SettingsEditor2 extends BaseEditor {
 
 	private onDidChangeSetting(key: string, value: any): void {
 		this.configurationService.updateValue(key, value, <ConfigurationTarget>this.settingsTargetsWidget.settingsTarget).then(
-			null,
+			() => this.render(),
 			e => {
 				// ConfigurationService displays the error
 			});
@@ -291,7 +309,11 @@ export class SettingsEditor2 extends BaseEditor {
 
 			const entries: (ISettingItemEntry|IGroupTitleEntry)[] = [];
 			const navEntries: INavListEntry[] = [];
-			for (const groupIdx in this.defaultSettingsEditorModel.settingsGroups) {
+			for (let groupIdx = 0; groupIdx < this.defaultSettingsEditorModel.settingsGroups.length; groupIdx++) {
+				if (groupIdx > 0 && !this.showAllSettings) {
+					break;
+				}
+
 				const group = this.defaultSettingsEditorModel.settingsGroups[groupIdx];
 				const groupEntries = [];
 				for (const section of group.sections) {
@@ -306,7 +328,7 @@ export class SettingsEditor2 extends BaseEditor {
 				if (groupEntries.length) {
 					navEntries.push({
 						id: group.id,
-						index: parseInt(groupIdx),
+						index: groupIdx,
 						title: group.title,
 						templateId: SETTINGS_NAV_TEMPLATE_ID
 					});
@@ -405,12 +427,13 @@ class SettingItemDelegate implements IDelegate<IListEntry> {
 
 		if (entry.templateId === SETTINGS_ENTRY_TEMPLATE_ID) {
 			// dynamic height
-			const template = this.settingItemRenderer.renderTemplate(this.offsetHelper);
-			this.settingItemRenderer.renderElement(entry, 0, template);
+			// const template = this.settingItemRenderer.renderTemplate(this.offsetHelper);
+			// this.settingItemRenderer.renderElement(entry, 0, template);
 
-			const height = template.parent.offsetHeight;
-			DOM.clearNode(this.offsetHelper);
-			return height;
+			// const height = template.parent.offsetHeight;
+			// DOM.clearNode(this.offsetHelper);
+			// return height;
+			return 110;
 		}
 
 		return 0;

@@ -78,6 +78,10 @@
 	margin-top: 18px;
 }
 
+.settings-editor > .settings-body .settings-nav-container .settings-nav-controls-configured-only {
+	margin-bottom: 10px;
+}
+
 .settings-editor > .settings-body .settings-list-container .monaco-list::before {
 	outline: none !important;
 }

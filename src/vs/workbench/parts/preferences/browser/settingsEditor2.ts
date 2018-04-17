@@ -35,6 +35,7 @@ import { IPreferencesService, ISetting } from 'vs/workbench/services/preferences
 import { PreferencesEditorInput2 } from 'vs/workbench/services/preferences/common/preferencesEditorInput';
 import { DefaultSettingsEditorModel } from 'vs/workbench/services/preferences/common/preferencesModels';
 import { Button } from '../../../../base/browser/ui/button/button';
+import { SettingMatches } from 'vs/workbench/parts/preferences/electron-browser/preferencesSearch';
 
 const SETTINGS_ENTRY_TEMPLATE_ID = 'settings.entry.template';
 const SETTINGS_NAV_TEMPLATE_ID = 'settings.nav.template';
@@ -168,7 +169,7 @@ export class SettingsEditor2 extends BaseEditor {
 			placeholder: localize('SearchSettings.Placeholder', "Search settings"),
 			focusKey: this.searchFocusContextKey
 		}));
-		// this._register(this.searchWidget.onDidChange(searchValue => this.delayedFiltering.trigger(() => this.filterSettings())));
+		this._register(this.searchWidget.onDidChange(searchValue => this.delayedFiltering.trigger(() => this.filterSettings())));
 
 		const headerControlsContainer = DOM.append(this.headerContainer, $('div.settings-header-controls-container'));
 		const targetWidgetContainer = DOM.append(headerControlsContainer, $('.settings-target-container'));
@@ -301,11 +302,13 @@ export class SettingsEditor2 extends BaseEditor {
 
 	private filterSettings(): void {
 		this.renderEntries();
-		this.delayedFilterLogging.trigger(() => this.reportFilteringUsed(this.searchWidget.getValue()));
+		// this.delayedFilterLogging.trigger(() => this.reportFilteringUsed(this.searchWidget.getValue()));
 	}
 
 	private renderEntries(): void {
 		if (this.defaultSettingsEditorModel) {
+
+			const filter = this.searchWidget.getValue();
 
 			const entries: (ISettingItemEntry|IGroupTitleEntry)[] = [];
 			const navEntries: INavListEntry[] = [];
@@ -318,9 +321,13 @@ export class SettingsEditor2 extends BaseEditor {
 				const groupEntries = [];
 				for (const section of group.sections) {
 					for (const setting of section.settings) {
-						const entry = this.settingToEntry(setting);
-						if (!this.showConfiguredSettingsOnly || (this.showConfiguredSettingsOnly && entry.isConfigured)) {
-							groupEntries.push(entry);
+						const matches = new SettingMatches(filter, setting, true, true, (filter, setting) => this.defaultSettingsEditorModel.findValueMatches(filter, setting)).matches;
+
+						if (matches && matches.length) {
+							const entry = this.settingToEntry(setting);
+							if (!this.showConfiguredSettingsOnly || (this.showConfiguredSettingsOnly && entry.isConfigured)) {
+								groupEntries.push(entry);
+							}
 						}
 					}
 				}
@@ -433,7 +440,7 @@ class SettingItemDelegate implements IDelegate<IListEntry> {
 			// const height = template.parent.offsetHeight;
 			// DOM.clearNode(this.offsetHelper);
 			// return height;
-			return 110;
+			return 125;
 		}
 
 		return 0;

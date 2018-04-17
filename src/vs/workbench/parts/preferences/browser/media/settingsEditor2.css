@@ -10,7 +10,7 @@
 /* header styling */
 
 .settings-editor > .settings-header {
-	padding: 0px 10px 11px 0;
+	padding: 0px 10px 0px 0px;
 }
 
 .settings-editor > .settings-header > .search-container {
@@ -56,6 +56,14 @@
 	margin-left: 4px;
 }
 
+.settings-editor > .settings-body .settings-nav-controls {
+	margin-bottom: 15px;
+}
+
+.settings-editor > .settings-body .settings-nav-controls .monaco-custom-checkbox {
+	margin-right: 5px;
+}
+
 .settings-editor > .settings-body .settings-list-container .settings-list-offset-helper {
 	opacity: 0;
 	position: absolute;
@@ -65,8 +73,9 @@
 	display: flex;
 }
 
-.settings-editor > .settings-body .settings-nav-list-container {
-	width: 220px;
+.settings-editor > .settings-body .settings-nav-container {
+	width: 250px;
+	margin-top: 18px;
 }
 
 .settings-editor > .settings-body .settings-list-container .monaco-list::before {
@@ -125,12 +134,14 @@
 	font-size: 12px;
 }
 
+.settings-editor .settings-nav-controls .monaco-custom-checkbox.unchecked,
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-custom-checkbox.unchecked {
 	background: url("action-remove.svg") center center no-repeat;
 	/* Unchecked border style needs to be stylable on checkbox. Themeable? */
 	border-color: #75715e !important;
 }
 
+.settings-editor .settings-nav-controls .monaco-custom-checkbox.checked,
 .settings-editor > .settings-body > .settings-list-container .monaco-list-row .monaco-custom-checkbox.checked {
 	background: url("action-remove-focus.svg") center center no-repeat;
 }

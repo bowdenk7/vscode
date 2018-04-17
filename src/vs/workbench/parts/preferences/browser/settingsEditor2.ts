@@ -76,6 +76,8 @@ export class SettingsEditor2 extends BaseEditor {
 	private searchWidget: SearchWidget;
 	private settingsTargetsWidget: SettingsTargetsWidget;
 
+	private showConfiguredSettingsOnly = false;
+
 	private settingsListContainer: HTMLElement;
 	private navListContainer: HTMLElement;
 	private listEntries: IListEntry[];
@@ -136,6 +138,7 @@ export class SettingsEditor2 extends BaseEditor {
 		this.searchWidget.layout(dimension);
 
 		this.layoutSettingsList();
+		this.render();
 	}
 
 	focus(): void {
@@ -196,7 +199,10 @@ export class SettingsEditor2 extends BaseEditor {
 
 	private createBody(parent: HTMLElement): void {
 		const bodyContainer = DOM.append(parent, $('.settings-body'));
-		this.createNavList(bodyContainer);
+
+		const navContainer = DOM.append(bodyContainer, $('.settings-nav-container'));
+		this.createNavControls(navContainer);
+		this.createNavList(navContainer);
 		this.createList(bodyContainer);
 	}
 
@@ -213,6 +219,24 @@ export class SettingsEditor2 extends BaseEditor {
 				identityProvider: e => e.id,
 				ariaLabel: localize('navListLabel', "Settings Categories")
 			}));
+	}
+
+	private createNavControls(parent: HTMLElement): void {
+		const navControls = DOM.append(parent, $('.settings-nav-controls'));
+		const label = DOM.append(navControls, $('span.settings-nav-controls-label'));
+		label.textContent = 'Show configured settings only';
+
+		const configuredOnlyCheckbox = new Checkbox({
+			isChecked: this.showConfiguredSettingsOnly,
+			onChange: e => {
+				this.showConfiguredSettingsOnly = configuredOnlyCheckbox.checked;
+				this.render();
+			},
+			actionClassName: 'settings-nav-checkbox',
+			title: 'Show configured settings only'
+		});
+
+		navControls.appendChild(configuredOnlyCheckbox.domNode);
 	}
 
 	private createList(parent: HTMLElement): void {
@@ -269,23 +293,31 @@ export class SettingsEditor2 extends BaseEditor {
 			const navEntries: INavListEntry[] = [];
 			for (const groupIdx in this.defaultSettingsEditorModel.settingsGroups) {
 				const group = this.defaultSettingsEditorModel.settingsGroups[groupIdx];
-				navEntries.push({
-					id: group.id,
-					index: parseInt(groupIdx),
-					title: group.title,
-					templateId: SETTINGS_NAV_TEMPLATE_ID
-				});
-
-				entries.push(<IGroupTitleEntry>{
-					id: group.id,
-					templateId: SETTINGS_GROUP_ENTRY_TEMPLATE_ID,
-					title: group.title
-				});
-
+				const groupEntries = [];
 				for (const section of group.sections) {
 					for (const setting of section.settings) {
-						entries.push(this.settingToEntry(setting));
+						const entry = this.settingToEntry(setting);
+						if (!this.showConfiguredSettingsOnly || (this.showConfiguredSettingsOnly && entry.isConfigured)) {
+							groupEntries.push(entry);
+						}
 					}
+				}
+
+				if (groupEntries.length) {
+					navEntries.push({
+						id: group.id,
+						index: parseInt(groupIdx),
+						title: group.title,
+						templateId: SETTINGS_NAV_TEMPLATE_ID
+					});
+
+					entries.push(<IGroupTitleEntry>{
+						id: group.id,
+						templateId: SETTINGS_GROUP_ENTRY_TEMPLATE_ID,
+						title: group.title
+					});
+
+					entries.push(...groupEntries);
 				}
 			}
 
@@ -520,7 +552,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 		const checkbox = new Checkbox({
 			isChecked: entry.value,
 			title: entry.key,
-			onChange: e => onChange(e.valueOf()),
+			onChange: e => onChange(checkbox.checked),
 			actionClassName: 'setting-value-checkbox'
 		});
 		template.toDispose.push(checkbox);

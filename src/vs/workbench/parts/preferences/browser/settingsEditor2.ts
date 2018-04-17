@@ -26,7 +26,7 @@ import { IInstantiationService } from 'vs/platform/instantiation/common/instanti
 import { WorkbenchList } from 'vs/platform/list/browser/listService';
 import { INotificationService } from 'vs/platform/notification/common/notification';
 import { ITelemetryService } from 'vs/platform/telemetry/common/telemetry';
-import { attachInputBoxStyler, attachSelectBoxStyler } from 'vs/platform/theme/common/styler';
+import { attachInputBoxStyler, attachSelectBoxStyler, attachButtonStyler } from 'vs/platform/theme/common/styler';
 import { IThemeService } from 'vs/platform/theme/common/themeService';
 import { BaseEditor } from 'vs/workbench/browser/parts/editor/baseEditor';
 import { EditorOptions } from 'vs/workbench/common/editor';
@@ -298,14 +298,14 @@ export class SettingsEditor2 extends BaseEditor {
 		const targetSelector = this.settingsTargetsWidget.settingsTarget === ConfigurationTarget.USER ? 'user' : 'workspace';
 		const inspected = this.configurationService.inspect(s.key);
 		const isConfigured = typeof inspected[targetSelector] !== 'undefined';
-		const displayValue = isConfigured ? inspected.default : inspected[targetSelector];
+		const displayValue = isConfigured ? inspected[targetSelector] : inspected.default;
 		const overriddenScopeList = [];
 		if (targetSelector === 'user' && typeof inspected.workspace !== 'undefined') {
-			overriddenScopeList.push('workspace');
+			overriddenScopeList.push('Workspace');
 		}
 
 		if (targetSelector === 'workspace' && typeof inspected.user !== 'undefined') {
-			overriddenScopeList.push('user');
+			overriddenScopeList.push('User');
 		}
 
 		return <ISettingItemEntry>{
@@ -378,7 +378,6 @@ interface ISettingItemTemplate {
 	keyElement: HTMLElement;
 	descriptionElement: HTMLElement;
 	valueElement: HTMLElement;
-	resetElement: HTMLElement;
 	overridesElement: HTMLElement;
 }
 
@@ -424,10 +423,10 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 		const descriptionElement = $('div.setting-item-description');
 		const valueElement = $('div.setting-item-value');
 
-		const resetElement = $('div.setting-item-reset');
 		const overridesElement = $('div.setting-item-overrides');
 
-		const itemContainer = $('div.setting-item-container', undefined, titleElement, descriptionElement, valueElement, resetElement, overridesElement);
+		const itemContainer = $('div.setting-item-container', undefined, titleElement, descriptionElement, valueElement, overridesElement);
+		parent.appendChild(itemContainer);
 
 		return {
 			parent: parent,
@@ -438,7 +437,6 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 			labelElement,
 			descriptionElement,
 			valueElement,
-			resetElement,
 			overridesElement
 		};
 	}
@@ -450,13 +448,21 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 		template.labelElement.textContent = settingKeyToLabel(entry.key);
 		template.descriptionElement.textContent = entry.description;
 
-		const resetButton = new Button(template.resetElement);
+		DOM.toggleClass(template.parent, 'is-configured', entry.isConfigured);
+		this.renderValue(entry, template);
+
+		const resetButton = new Button(template.valueElement);
+		attachButtonStyler(resetButton, this.themeService, {
+			buttonBackground: Color.transparent.toString(),
+			buttonHoverBackground: Color.transparent.toString()
+		});
 		template.toDispose.push(resetButton.onDidClick(e => {
 			this._onDidChangeSetting.fire({ key: entry.key, value: undefined });
 		}));
 		template.toDispose.push(resetButton);
 
-		this.renderValue(entry, template);
+		template.overridesElement.textContent = entry.overriddenScopeList.length ? 'Also configured in: ' + entry.overriddenScopeList.join(', ') :
+			'';
 	}
 
 	private renderValue(entry: ISettingItemEntry, template: ISettingItemTemplate): void {
@@ -473,8 +479,6 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 		} else {
 			template.valueElement.textContent = 'Edit in settings.json!';
 		}
-
-		template.parent.appendChild(template.containerElement);
 	}
 
 	private renderBool(entry: ISettingItemEntry, template: ISettingItemTemplate, onChange: (value: boolean) => void): void {
@@ -493,9 +497,7 @@ class SettingItemRenderer implements IRenderer<ISettingItemEntry, ISettingItemTe
 		const idx = entry.enum.indexOf(entry.value);
 		const selectBox = new SelectBox(entry.enum, idx, this.contextViewService);
 		template.toDispose.push(selectBox);
-		template.toDispose.push(attachSelectBoxStyler(selectBox, this.themeService, {
-			// selectBackground: editorBackground
-		}));
+		template.toDispose.push(attachSelectBoxStyler(selectBox, this.themeService));
 		selectBox.render(template.valueElement);
 
 		template.toDispose.push(
